@@ -1,0 +1,13 @@
+OLCAR Exercise 3 - Questions and Answers
+========================================
+
+1. How  much  cost  improvement  did  you  obtain  using  PI2  learning?
+(answer in 1 sentence and attach one of your cost-plots)
+
+2. How does the exploration noise (Task.std_noise) affect the learning curve?  What happens if you decrease/increase it?
+
+3. The tuning parameter Task.num_reuse specifies how many (of the best) rollouts are saved, carried over  and  reused  in  the  next  learning  iteration.   Why  does  it  make  sense  to  keep  some  of  the  best rollouts for the next update?
+
+4. How does the quality of your initial guess affect the PI2 learning?  For example, what happens if you limit your ILQC iterations to only 1?
+
+5. While executing your program, you might have noticed that the cost is not always strictly decreasing during learning.  What is your explanation for this behaviour?
