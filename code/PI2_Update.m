@@ -50,25 +50,28 @@ function delta_theta = PI2_Update(Task,batch_sim_out,batch_cost)
 % Hint: start by extracting the following quantities
 
 % Number of control inputs
-n_u  = ...
+n_u  = size(batch_sim_out(1).u,1);
     
 % The total number of parameters per input
-n_theta = ...
+n_theta = size(batch_sim_out(1).Controller.theta,1); % (n+1)*numstates
     
-% The length of the Upsilone basis function (time-varying basis funciton)
-n_gaussian = ...
+% The length of the Upsilone ("Y") basis function (time-varying basis funciton)
+n_gaussian = Task.n_gaussian;
     
 % Number of time steps
-n_time = ...
+n_time = (Task.goal_time-Task.start_time)/Task.dt + 1;
     
 % Number of rollouts per iteration
-n_rollouts = ...
+n_rollouts = Task.num_rollouts;
 
+n_states = size(batch_sim_out(1).x,1);
 
+% For each control input i and time s:
+% - Calculate the Return from starting time s for the kth rollout
+% - Calculate alpha from starting time s for the kth rollout
 
 % The return of rollouts
-R = ...
-
+R = batch_cost; % size: n_rollouts x n_time
 
 %% The exponentiated cost calculation is given 
 % compute the exponentiated cost with the special trick to automatically
@@ -79,19 +82,65 @@ medR = repmat( median(R,1), [n_rollouts 1]);
 
 % \exp(-1/lambda R)
 expR = exp(-10*(R-minR)./(maxR-minR));
+alpha = expR./repmat( sum(expR,1), [n_rollouts 1]);
 
+% Used for intermediate calculations to finally come to delta_theta_i
+delta_theta_i_s = zeros(n_gaussian, n_states+1, n_time);
 
-%% continue here with computing alpha
-alpha = ...
-
-
+% Same but not dependent on time.
+delta_theta_i = zeros(n_gaussian, n_states+1);
 %%
 for i = 1:n_u % for each input i
-   
-    ...
-    ...
-    ...
-  
+    %theta_i = batch_sim_out.Controller.BaseFnc(batch_sim_out.t,sim_out.x);
+    for s = 1:n_time % for each time
+        % Calculate the time varying parameter increment delta_theta_i_s
+        sumDeltaTheta = zeros(n_gaussian,n_states+1);
+        
+        for k = 1:n_rollouts
+            
+            x_k = batch_sim_out(k).x;
+            t_k = batch_sim_out(k).t;
+            
+            epsilonVec = batch_sim_out(k).eps(:,i,s);
+            epsilonMat = vec2mat(epsilonVec);
+            
+            upsilonBarVec = batch_sim_out(k).Controller.BaseFnc(t_k(s), x_k); % BaseFnc(t, x)
+            upsilonBarMat = vec2mat(upsilonBarVec); % g x (n+1)
+            
+            upsilonVec = upsilonBarMat(:,1); % g x 1
+            
+            upsEpsMatrix = (upsilonVec*upsilonVec')/(upsilonVec'*upsilonVec) * epsilonMat; % (g x g) * (g x (n + 1))
+ 
+            sumDeltaTheta = sumDeltaTheta + alpha(k,s)*upsEpsMatrix; % scalar * matrix
+        end
+        
+        delta_theta_i_s(:,:,s) = sumDeltaTheta;
+    end % for..s
+    
+    for j = 1:size(delta_theta_i_s,2) % For the jth column of delta_theta_i_s matrix
+        
+        x_1 = batch_sim_out(1).x;
+        t_1 = batch_sim_out(1).t;
+        
+        % Time-averaging the parameter vector
+        
+        % Calculate integrand to assign delta_theta_i_s
+        integrandDeltaTheta = zeros(n_gaussian,1);
+        normalizationVector = zeros(n_gaussian,1);
+        for s = 1:n_time
+            upsilonBarVec = batch_sim_out(1).Controller.BaseFnc(t_1(s), x_1); % BaseFnc(t, x)
+            upsilonBarMat = vec2mat(upsilonBarVec); % g x (n+1)
+
+            upsilonVec_S = upsilonBarMat(:,1); % g x 1
+            
+            normalizationVector = normalizationVector + upsilonVec_S;
+        
+            integrandDeltaTheta = integrandDeltaTheta + delta_theta_i_s(:,j,s) .* upsilonVec_S;  
+        end
+        
+        delta_theta_i(:,j) = integrandDeltaTheta ./ normalizationVector;        
+    end % for..j
+
     %% conversion back to vector-style
     delta_theta(:,i) = mat2vec(delta_theta_i);
     
@@ -102,7 +151,7 @@ end
 %% additional functions vec2mat and mat2vec that are provided
 function mat = vec2mat(vec)
     % Moving the time dimension (2nd dimension) to 3rd dimension
-    % if the we have just one time instance, this will not change the 
+    % if we have just one time instance, this will not change the 
     % dimension of vec
     vec = permute(vec, [1 3 2]);
     

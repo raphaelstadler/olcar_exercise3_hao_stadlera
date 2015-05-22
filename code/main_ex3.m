@@ -22,7 +22,7 @@ Task.cost = Cost_Design( Model.param.mQ, Task );
 
 %% Initial controller design - fill in your ILQC_Design here
 [Initial_Controller, Cost_LQR] = LQR_Design(Model, Task);
-[ILQC_Controller, Cost] = ...
+[ILQC_Controller, Cost] = ILQC_Design(Model,Task,Initial_Controller,@Quad_Simulator);
 clear Model;
 
 
@@ -32,7 +32,6 @@ ReducedController = BaseFcnTrans(ILQC_Controller,Task.n_gaussian);
 
 %% Load the perturbed "real" quadrotor model
 load('Quadrotor_Model_perturbed.mat','Model_perturbed'); 
-
 
 %% Visualization of initial guess with policy in base function representation on perturbed system
 Task.noise_insertion_method = '';
