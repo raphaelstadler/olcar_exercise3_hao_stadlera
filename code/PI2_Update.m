@@ -86,28 +86,27 @@ alpha = expR./repmat( sum(expR,1), [n_rollouts 1]);
 
 % Used for intermediate calculations to finally come to delta_theta_i
 delta_theta_i_s = zeros(n_gaussian, n_states+1, n_time);
-
 % Same but not dependent on time.
 delta_theta_i = zeros(n_gaussian, n_states+1);
+% Also initialize complete delta_theta
+delta_theta = zeros(n_gaussian*(n_states+1),n_u);
 %%
 for i = 1:n_u % for each input i
-    %theta_i = batch_sim_out.Controller.BaseFnc(batch_sim_out.t,sim_out.x);
     for s = 1:n_time % for each time
+        
         % Calculate the time varying parameter increment delta_theta_i_s
         sumDeltaTheta = zeros(n_gaussian,n_states+1);
-        
-        for k = 1:n_rollouts
-            
+        for k = 1:n_rollouts   
             x_k = batch_sim_out(k).x;
             t_k = batch_sim_out(k).t;
             
             epsilonVec = batch_sim_out(k).eps(:,i,s);
             epsilonMat = vec2mat(epsilonVec);
             
-            upsilonBarVec = batch_sim_out(k).Controller.BaseFnc(t_k(s), x_k); % BaseFnc(t, x)
+            upsilonBarVec = batch_sim_out(k).Controller.BaseFnc(t_k(s), x_k); % BaseFnc(t, x) % (n+1)*g x 1
             upsilonBarMat = vec2mat(upsilonBarVec); % g x (n+1)
-            
             upsilonVec = upsilonBarMat(:,1); % g x 1
+            
             
             upsEpsMatrix = (upsilonVec*upsilonVec')/(upsilonVec'*upsilonVec) * epsilonMat; % (g x g) * (g x (n + 1))
  
@@ -117,35 +116,41 @@ for i = 1:n_u % for each input i
         delta_theta_i_s(:,:,s) = sumDeltaTheta;
     end % for..s
     
-    for j = 1:size(delta_theta_i_s,2) % For the jth column of delta_theta_i_s matrix
-        
-        x_1 = batch_sim_out(1).x;
-        t_1 = batch_sim_out(1).t;
-        
-        % Time-averaging the parameter vector
-        
-        % Calculate integrand to assign delta_theta_i_s
-        integrandDeltaTheta = zeros(n_gaussian,1);
-        normalizationVector = zeros(n_gaussian,1);
-        for s = 1:n_time
-            upsilonBarVec = batch_sim_out(1).Controller.BaseFnc(t_1(s), x_1); % BaseFnc(t, x)
-            upsilonBarMat = vec2mat(upsilonBarVec); % g x (n+1)
+    % Time-averaging the parameter vector
+    x_1 = batch_sim_out(1).x;
+    t_1 = batch_sim_out(1).t;
+    upsilonBarVec = batch_sim_out(1).Controller.BaseFnc(t_1, x_1); % BaseFnc(t, x) % g*(n+1) x t
+    upsilonBarMat = vec2mat(upsilonBarVec); % g x (n+1) x t
 
-            upsilonVec_S = upsilonBarMat(:,1); % g x 1
-            
-            normalizationVector = normalizationVector + upsilonVec_S;
-        
-            integrandDeltaTheta = integrandDeltaTheta + delta_theta_i_s(:,j,s) .* upsilonVec_S;  
-        end
-        
-        delta_theta_i(:,j) = integrandDeltaTheta ./ normalizationVector;        
-    end % for..j
+    delta_theta_i = sum((upsilonBarMat .* delta_theta_i_s),3) ./ sum(upsilonBarMat,3);
+    
+%     for j = 1:size(delta_theta_i_s,2) % For the jth column of delta_theta_i_s matrix    
+%         x_1 = batch_sim_out(1).x;
+%         t_1 = batch_sim_out(1).t;
+%         
+%         % Time-averaging the parameter vector
+%         
+%         % Calculate integrand to assign delta_theta_i_s
+%         integrandDeltaTheta = zeros(n_gaussian,1);
+%         normalizationVector = zeros(n_gaussian,1);
+%         
+%         for s = 1:n_time
+%             upsilonBarVec = batch_sim_out(1).Controller.BaseFnc(t_1(s), x_1); % BaseFnc(t, x)
+%             upsilonBarMat = vec2mat(upsilonBarVec); % g x (n+1)
+% 
+%             upsilonVec_S = upsilonBarMat(:,1); % g x 1
+%             
+%             normalizationVector = normalizationVector + upsilonVec_S;
+%         
+%             integrandDeltaTheta = integrandDeltaTheta + delta_theta_i_s(:,j,s) .* upsilonVec_S;  
+%         end
+%         
+%         delta_theta_i(:,j) = integrandDeltaTheta ./ normalizationVector;        
+%     end % for..j
 
     %% conversion back to vector-style
     delta_theta(:,i) = mat2vec(delta_theta_i);
-    
 end
-
 
 
 %% additional functions vec2mat and mat2vec that are provided
